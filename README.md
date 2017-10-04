@@ -36,6 +36,10 @@ of records). The idea is: Its test data, so its better to have something rather 
 should not be used for transferring **into** a production instance. Because of this, SandboxBerry will only allow you to specify Sandboxes 
 as the target.
 
+# License
+
+SandboxBerry is Open Source under the GPL2 license.
+
 # Downloading
 
 SandboxBerry is a windows application written in C# and uses the .NET Framework 4.5.  
