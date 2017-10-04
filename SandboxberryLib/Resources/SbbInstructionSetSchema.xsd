@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="SbbInstructionSet" nillable="true" type="SbbInstructionSet" />
+  <xs:complexType name="SbbInstructionSet">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="1" name="SbbObjects" type="ArrayOfSbbObject" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="ArrayOfSbbObject">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="SbbObject" nillable="true" type="SbbObject" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="SbbObject">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="1" name="SbbFieldOptions" type="ArrayOfSbbFieldOption" />
+    </xs:sequence>
+    <xs:attribute name="ApiName" type="xs:string" />
+    <xs:attribute name="Filter" type="xs:string" />
+  </xs:complexType>
+  <xs:complexType name="ArrayOfSbbFieldOption">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="SbbFieldOption" nillable="true" type="SbbFieldOption" />
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="SbbFieldOption">
+    <xs:attribute name="ApiName" type="xs:string" />
+    <xs:attribute name="Skip" type="xs:boolean" />
+    <xs:attribute name="ReplaceText" type="xs:string" />
+  </xs:complexType>
+</xs:schema>
