@@ -43,8 +43,17 @@ SandboxBerry is Open Source under the GPL2 license.
 # Downloading
 
 SandboxBerry is a windows application written in C# and uses the .NET Framework 4.5.  
+You'll need .NET 4.5 Framework installed already (most recent PCs will have it)  
+
+* Download the latest Zip from the [GitHub Releases](https://github.com/codeulike/SandboxBerry/releases) page
+* Unzip it in a folder and run SandboxBerry.exe
+* Read the documentation in the [Wiki](https://github.com/codeulike/SandboxBerry/wiki) 
+
+# Running from Source
+
 Visual Studio 2012 was used for the initial project but it should be easily loadable in more recent versions of VS.  
-Download the solution and ooen it in VS
+Download the solution and ooen it in VS.  
+You'll need .NET 4.5 installed.
 
 # Getting Started
 
