@@ -36,11 +36,13 @@ of records). The idea is: Its test data, so its better to have something rather 
 should not be used for transferring **into** a production instance. Because of this, SandboxBerry will only allow you to specify Sandboxes 
 as the target.
 
-# Getting Started
+# Downloading
 
 SandboxBerry is a windows application written in C# and uses the .NET Framework 4.5.  
 Visual Studio 2012 was used for the initial project but it should be easily loadable in more recent versions of VS.  
 Download the solution and ooen it in VS
 
-tbc
+# Getting Started
+
+Refer to the [Wiki](https://github.com/codeulike/SandboxBerry/wiki) for instructions on how to use SandboxBerry
 
