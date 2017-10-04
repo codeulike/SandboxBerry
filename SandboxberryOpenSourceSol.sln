@@ -8,7 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{43B276E4-0AAA-46CB-9799-759B2EAFBF56}"
 	ProjectSection(SolutionItems) = preProject
 		License_Gpl2.txt = License_Gpl2.txt
-		Readme.txt = Readme.txt
+		notes.txt = notes.txt
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandboxberry", "Sandboxberry\Sandboxberry.csproj", "{108FA37A-1DA5-4189-AF60-167567E149E5}"
