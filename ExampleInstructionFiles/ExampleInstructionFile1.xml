@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SbbInstructionSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SbbObjects>
+    <!-- add the objects you want to transfer, giving their API name -->
+	<!-- the order should be least-dependencies-first -->
+	<!-- e.g. here we do Country__c first because some of other objects might relate to it -->
+    <SbbObject ApiName="Country__c" />
+    <SbbObject ApiName="Nationality__c" />
+	<!-- For account we want to apply a filter based on a custom field called Help_Sandbox_Data_Set__c -->
+    <SbbObject ApiName="Account" Filter="Help_Sandbox_Data_Set__c = true" />
+    <SbbObject ApiName="Client__c"  />
+  </SbbObjects>
+</SbbInstructionSet>
