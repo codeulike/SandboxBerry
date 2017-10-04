@@ -26,9 +26,9 @@ This is how SandboxBerry works:
 * optionally you can specify filters for those objects in SOQL syntax
 * SandboxBerry will then transfer the data for those objects from your Source (usually Production) to a Target (always a Sandbox)
 * While transferring the data, it fixes the following problems:
-** Relationships between objects will automatically be preserved, substituting new Ids for the old Ids
-** Any inactive or missing users will be defaulted to the user specified by you
-** Only the objects fields that are present in both Source and Target will be transferred
+  * Relationships between objects will automatically be preserved, substituting new Ids for the old Ids
+  * Any inactive or missing users will be defaulted to the user specified by you
+  * Only the objects fields that are present in both Source and Target will be transferred
 * Optionally, you can skip specific fields or hard-code their values in the Target - this can be useful for anonymisation
 
 Please note that SandboxBerry takes some liberties with the data to get it to fit into your sandbox (e.g. changing the owner 
