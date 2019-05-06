@@ -86,6 +86,8 @@ namespace SandboxberryLib
             var targetUserIds = _targetTasks.GetAllUsers();
             var missingUserIds = sourceUserIds.Except(targetUserIds).ToList();
             logger.DebugFormat("Found {0} users in Source that are not in Target", missingUserIds.Count());
+            var processedObjects = new List<String> { "User" }; // user is copied already
+            var lookupsToRevisit = new List<KeyValuePair<string, string>>();
 
             foreach (SbbObject objLoop in _instructions.SbbObjects)
             {
@@ -103,6 +105,17 @@ namespace SandboxberryLib
 
                 transformer.ObjectRelationships = _sourceTasks.GetObjectRelationships(objLoop.ApiName);
                 transformer.RecursiveRelationshipField = transformer.ObjectRelationships.FirstOrDefault(d => d.Value == objLoop.ApiName).Key;
+
+                // find lookups on this object that can't be populated
+                var missingLookups = transformer.ObjectRelationships.Where(
+                    d => d.Value != objLoop.ApiName             // where it's not a recursive relationship
+                         && !processedObjects.Contains(d.Value) // and we haven't already processed this object (i.e. it's not going to be mapped)
+                         && !objLoop.SbbFieldOptions.Any(       // and it's not one of the skipped fields
+                                e => e.ApiName.Equals(d.Key)
+                                     && e.Skip));
+                
+                lookupsToRevisit = lookupsToRevisit.Concat(missingLookups).ToList();
+
                 if (transformer.RecursiveRelationshipField != null)
                     logger.DebugFormat("Object {0} has a recurive relation to iteself in field {1}",
                         objLoop.ApiName, transformer.RecursiveRelationshipField);
@@ -179,7 +192,79 @@ namespace SandboxberryLib
 
                 ProgressUpdate(string.Format("Summary for {0}: Success {1} Fail {2}",
                     objLoop.ApiName, objres.SuccessCount, objres.FailCount));
+                processedObjects.Add(objLoop.ApiName);
+            }
 
+            // revisit lookups that will be missing and populate them now that all the records are
+            // loaded into the sandbox
+            foreach(var missingLookup in lookupsToRevisit)
+            {
+                // retrieve data from the source org just for this field
+                var objres = new PopulateObjectResult();
+                List<sObject> sourceData = null;
+
+                try
+                {
+                    // get all records where this lookup has a value
+                    sourceData = _sourceTasks.GetDataFromSObject(
+                        sobjectName: missingLookup.Key,
+                        colList:     new List<string> { missingLookup.Key },
+                        filter:      missingLookup.Value + " <> ''");
+                }
+                catch (Exception e)
+                {
+                    string errMess = string.Format("Error while fetching data for {0}: {1}", missingLookup.Value, e.Message);
+                    throw new ApplicationException(errMess, e);
+                }
+
+                objres.SourceRows = sourceData.Count();
+                ProgressUpdate(string.Format("Received {0} {1} records from source", sourceData.Count, missingLookup.Value));
+
+                // switch the IDs with the new ones in the sandbox
+                // get working info and transform objects
+                var workingList = new List<ObjectTransformer.sObjectWrapper>();
+                foreach (sObject rowLoop in sourceData)
+                {
+                    var wrap = new ObjectTransformer.sObjectWrapper();
+                    wrap.OriginalId = rowLoop.Id;
+                    wrap.sObj = rowLoop;
+
+                    // TODO: transformer.ApplyTransformations(wrap);
+                    
+                    workingList.Add(wrap);
+                }
+
+                // update records in batches
+                int batchSize = 100;
+                int done = 0;
+                bool allDone = false;
+                if (workingList.Count == 0)
+                    allDone = true;
+                while (!allDone)
+                {
+                    var workBatch = workingList.Skip(done).Take(batchSize).ToList();
+                    done += workBatch.Count;
+                    if (done >= workingList.Count)
+                        allDone = true;
+
+                    var insertRes = _targetTasks.UpdateSObjects(missingLookup.Value,
+                        workBatch.Select(w => w.sObj).ToArray());
+
+                    for (int i = 0; i < insertRes.Length; i++)
+                    {
+                        if (insertRes[i].Success)
+                        {
+                            objres.SuccessCount += 1;
+                        }
+                        else
+                        {
+                            workBatch[i].ErrorMessage = insertRes[i].ErrorMessage;
+                            logger.WarnFormat("Error when updating {0} {1} into target: {2}",
+                                missingLookup.Value, workBatch[i].OriginalId, workBatch[i].ErrorMessage);
+                            objres.FailCount += 1;
+                        }
+                    }
+                }
             }
 
             // log summary
