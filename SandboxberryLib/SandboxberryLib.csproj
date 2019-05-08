@@ -58,6 +58,7 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
     <Compile Include="RelationMapper.cs" />
+    <Compile Include="ResultsModel\LookupInfo.cs" />
     <Compile Include="ResultsModel\PopulateObjectResult.cs" />
     <Compile Include="ResultsModel\PopulateSandboxResult.cs" />
     <Compile Include="ResultsModel\RowFailInfo.cs" />

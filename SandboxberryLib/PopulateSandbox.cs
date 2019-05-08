@@ -87,7 +87,7 @@ namespace SandboxberryLib
             var missingUserIds = sourceUserIds.Except(targetUserIds).ToList();
             logger.DebugFormat("Found {0} users in Source that are not in Target", missingUserIds.Count());
             var processedObjects = new List<String> { "User" }; // user is copied already
-            var lookupsToRevisit = new List<KeyValuePair<string, string>>();
+            var lookupsToRevisit = new List<LookupInfo>();
 
             foreach (SbbObject objLoop in _instructions.SbbObjects)
             {
@@ -106,13 +106,20 @@ namespace SandboxberryLib
                 transformer.ObjectRelationships = _sourceTasks.GetObjectRelationships(objLoop.ApiName);
                 transformer.RecursiveRelationshipField = transformer.ObjectRelationships.FirstOrDefault(d => d.Value == objLoop.ApiName).Key;
 
-                // find lookups on this object that can't be populated
-                var missingLookups = transformer.ObjectRelationships.Where(
-                    d => d.Value != objLoop.ApiName             // where it's not a recursive relationship
-                         && !processedObjects.Contains(d.Value) // and we haven't already processed this object (i.e. it's not going to be mapped)
-                         && !objLoop.SbbFieldOptions.Any(       // and it's not one of the skipped fields
+                // find lookups on this object that can't be populated, to revisit later
+                var missingLookups = transformer.ObjectRelationships
+                    .Where(d => d.Value != objLoop.ApiName)          // where it's not a recursive relationship
+                    .Where(d => !processedObjects.Contains(d.Value)) // and this lookup can't be populated because we haven't already processed this object (i.e. the referenced record doesn't exist yet)
+                    .Where(d => !objLoop.SbbFieldOptions.Any(        // and it's not one of the skipped fields
                                 e => e.ApiName.Equals(d.Key)
-                                     && e.Skip));
+                                     && e.Skip))
+                    // TODO: but is still one of the included object types (e.g. not Contact -> "rh2__PS_Describe__c")
+                    .Select(d => new LookupInfo
+                    {
+                        FieldName = d.Key,
+                        ObjectName = objLoop.ApiName,
+                        RelatedObjectName = d.Value
+                    });
                 
                 lookupsToRevisit = lookupsToRevisit.Concat(missingLookups).ToList();
 
@@ -199,6 +206,9 @@ namespace SandboxberryLib
             // loaded into the sandbox
             foreach(var missingLookup in lookupsToRevisit)
             {
+                var transformer = new ObjectTransformer();
+                transformer.RelationMapper = _relationMapper;
+
                 // retrieve data from the source org just for this field
                 var objres = new PopulateObjectResult();
                 List<sObject> sourceData = null;
@@ -207,31 +217,43 @@ namespace SandboxberryLib
                 {
                     // get all records where this lookup has a value
                     sourceData = _sourceTasks.GetDataFromSObject(
-                        sobjectName: missingLookup.Key,
-                        colList:     new List<string> { missingLookup.Key },
-                        filter:      missingLookup.Value + " <> ''");
+                        sobjectName: missingLookup.ObjectName, //needs to be account, not contact
+                        colList:     new List<string> { "Id", missingLookup.FieldName },
+                        filter:      missingLookup.FieldName + " <> ''");
+                    // TODO: also include filters on this sobject from the instructions file
                 }
                 catch (Exception e)
                 {
-                    string errMess = string.Format("Error while fetching data for {0}: {1}", missingLookup.Value, e.Message);
+                    string errMess = string.Format("Error while fetching data for {0}: {1}", missingLookup.ObjectName, e.Message);
                     throw new ApplicationException(errMess, e);
                 }
 
                 objres.SourceRows = sourceData.Count();
-                ProgressUpdate(string.Format("Received {0} {1} records from source", sourceData.Count, missingLookup.Value));
+                ProgressUpdate(string.Format("Received {0} {1} records from source", sourceData.Count, missingLookup.ObjectName));
 
                 // switch the IDs with the new ones in the sandbox
                 // get working info and transform objects
                 var workingList = new List<ObjectTransformer.sObjectWrapper>();
                 foreach (sObject rowLoop in sourceData)
                 {
+                    rowLoop.Any = rowLoop.Any.Where(e => e.LocalName != "Id").ToArray();
                     var wrap = new ObjectTransformer.sObjectWrapper();
                     wrap.OriginalId = rowLoop.Id;
                     wrap.sObj = rowLoop;
 
-                    // TODO: transformer.ApplyTransformations(wrap);
-                    
-                    workingList.Add(wrap);
+                    transformer.FixRelatedIds(rowLoop,
+                        new Dictionary<string, string>
+                        {
+                            [missingLookup.FieldName] = missingLookup.RelatedObjectName
+                        });
+
+                    // also update the ID of the object itself
+                    wrap.sObj.Id = _relationMapper.RecallNewId(missingLookup.ObjectName, wrap.sObj.Id);
+
+                    if (wrap.sObj.Id != null)
+                    {
+                        workingList.Add(wrap);
+                    }
                 }
 
                 // update records in batches
@@ -247,7 +269,7 @@ namespace SandboxberryLib
                     if (done >= workingList.Count)
                         allDone = true;
 
-                    var insertRes = _targetTasks.UpdateSObjects(missingLookup.Value,
+                    var insertRes = _targetTasks.UpdateSObjects(missingLookup.ObjectName,
                         workBatch.Select(w => w.sObj).ToArray());
 
                     for (int i = 0; i < insertRes.Length; i++)
@@ -260,7 +282,7 @@ namespace SandboxberryLib
                         {
                             workBatch[i].ErrorMessage = insertRes[i].ErrorMessage;
                             logger.WarnFormat("Error when updating {0} {1} into target: {2}",
-                                missingLookup.Value, workBatch[i].OriginalId, workBatch[i].ErrorMessage);
+                                missingLookup.ObjectName, workBatch[i].OriginalId, workBatch[i].ErrorMessage);
                             objres.FailCount += 1;
                         }
                     }
