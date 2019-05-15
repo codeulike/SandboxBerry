@@ -227,79 +227,16 @@ namespace SandboxberryLib
                         }
                     }
 
-                    // retrieve data from the source org just for this field
-                    var objres = new PopulateObjectResult();
-                    //List<sObject> sourceData = null;
-
-                    //try
-                    //{
-                    //    // get all records where this lookup has a value
-                    //    sourceData = _sourceTasks.GetDataFromSObject(
-                    //        sobjectName: field.ObjectName, //needs to be account, not contact
-                    //        colList: new List<string> { "Id", field.FieldName },
-                    //        filter: field.FieldName + " <> ''");
-                    //    // TODO: also include filters on this sobject from the instructions file
-                    //}
-                    //catch (Exception e)
-                    //{
-                    //    string errMess = string.Format("Error while fetching data for {0}: {1}",
-                    //        field.ObjectName, e.Message);
-                    //    throw new ApplicationException(errMess, e);
-                    //}
-
-                    objres.SourceRows = updateList.Count();
                     ProgressUpdate(string.Format("Reprocessing {0} {1} records",
                         updateList.Count, field.ObjectName));
 
                     // switch the IDs with the new ones in the sandbox
-                    // get working info and transform objects
-                    var workingList = new List<ObjectTransformer.sObjectWrapper>();
                     foreach (sObject rowLoop in updateList)
                     {
-                        var wrap = new ObjectTransformer.sObjectWrapper();
-                        wrap.OriginalId = rowLoop.Id;
-                        wrap.sObj = rowLoop;
-
-                        // update the ID of the object itself
-                        wrap.sObj.Id = _relationMapper.RecallNewId(field.ObjectName, wrap.sObj.Id);
-
-                        if (wrap.sObj.Id != null)
-                        {
-                            workingList.Add(wrap);
-                        }
+                        rowLoop.Id = _relationMapper.RecallNewId(field.ObjectName, rowLoop.Id);
                     }
 
-                    // update records in batches
-                    int batchSize = 100;
-                    int done = 0;
-                    bool allDone = false;
-                    if (workingList.Count == 0)
-                        allDone = true;
-                    while (!allDone)
-                    {
-                        var workBatch = workingList.Skip(done).Take(batchSize).ToList();
-                        done += workBatch.Count;
-                        if (done >= workingList.Count)
-                            allDone = true;
-
-                        var insertRes = _targetTasks.UpdateSObjects(field.ObjectName,
-                            workBatch.Select(w => w.sObj).ToArray());
-
-                        for (int i = 0; i < insertRes.Length; i++)
-                        {
-                            if (insertRes[i].Success)
-                            {
-                                objres.SuccessCount += 1;
-                            }
-                            else
-                            {
-                                workBatch[i].ErrorMessage = insertRes[i].ErrorMessage;
-                                logger.WarnFormat("Error when updating {0} {1} into target: {2}",
-                                    field.ObjectName, workBatch[i].OriginalId, workBatch[i].ErrorMessage);
-                                objres.FailCount += 1;
-                            }
-                        }
-                    }
+                    var result = UpdateRecords(field.ObjectName, updateList);
                 }
             }
 
@@ -366,7 +303,7 @@ namespace SandboxberryLib
                     var updateObject = CreateSobjectWithLookup(apiName, apiName, recursiveRelationshipField,
                         new KeyValuePair<string, string>(wrapLoop.NewId, wrapLoop.RecursiveRelationshipOriginalId));
 
-                    if(updateObject != null)
+                    if (updateObject != null)
                     {
                         updateList.Add(updateObject);
                     }
@@ -376,10 +313,15 @@ namespace SandboxberryLib
             logger.DebugFormat("{0} rows in Object {1} have recursive relation {2} to update ....",
                 updateList.Count(), apiName, recursiveRelationshipField);
 
-            // TODO: refactor this stuff into a single method
-            // update objects in batches
-            int successCount = 0;
-            int failCount = 0;
+            var result = UpdateRecords(apiName, updateList);
+        }
+
+        /// <summary>
+        /// Updates a list of sobject records
+        /// </summary>
+        private PopulateObjectResult UpdateRecords(string objectName, List<sObject> updateList)
+        {
+            var result = new PopulateObjectResult();
             int done = 0;
             bool allDone = false;
             if (updateList.Count == 0)
@@ -391,29 +333,31 @@ namespace SandboxberryLib
                 if (done >= updateList.Count)
                     allDone = true;
 
-                var updateRes = _targetTasks.UpdateSObjects(apiName,
+                var updateRes = _targetTasks.UpdateSObjects(objectName,
                        batch.ToArray());
 
                 for (int i = 0; i < updateRes.Length; i++)
                 {
                     if (updateRes[i].Success)
                     {
-                        successCount+=1;
+                        result.SuccessCount += 1;
                     }
                     else
                     {
-                        
+
                         logger.WarnFormat("Error when updating {0} {1} in target: {2}",
-                            apiName, batch[i].Id, updateRes[i].ErrorMessage);
-                        failCount += 1;
+                            objectName, batch[i].Id, updateRes[i].ErrorMessage);
+                        result.FailCount += 1;
                     }
 
                 }
-                   
-            }
-            logger.DebugFormat("Object {0} recursive relation {1} updated. Attempted {2} Success {3} Failed {4}",
-               apiName, recursiveRelationshipField, updateList.Count, successCount, failCount);
 
+            }
+
+            logger.DebugFormat("Object {0} updated. Attempted {1} Success {2} Failed {3}",
+               objectName, updateList.Count, result.SuccessCount, result.FailCount);
+
+            return result;
         }
 
         private void LoginToBoth()
