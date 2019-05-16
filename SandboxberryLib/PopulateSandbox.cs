@@ -125,8 +125,8 @@ namespace SandboxberryLib
                         RelatedObjectName = d.Value
                     })
                     .ToList();
-                
-                if(transformer.LookupsToReprocess.Count > 0)
+
+                if (transformer.LookupsToReprocess.Count > 0)
                 {
                     objectsToReprocess.Add(transformer);
                     var fields = transformer.LookupsToReprocess.Select(lookup => lookup.FieldName);
@@ -209,14 +209,76 @@ namespace SandboxberryLib
                 processedObjects.Add(objLoop.ApiName);
             }
 
-            // reprocess lookups that were missed and populate them, now that all the records
-            // are loaded into the sandbox
-            foreach(var obj in objectsToReprocess)
+            // reprocess lookup relationships that can be populated now that the inserts are done
+            var reprocessingResults = ReprocessObjects(objectsToReprocess);
+
+            // log summary
+            ProgressUpdate("************************************************");
+            foreach (var resLoop in res.ObjectResults)
+            {
+                ProgressUpdate(string.Format("Summary for {0}: Success {1} Fail {2}",
+                 resLoop.ApiName, resLoop.SuccessCount, resLoop.FailCount));
+
+            }
+
+            // log reprocssing summary
+            foreach (var resLoop in reprocessingResults.ObjectResults)
+            {
+                ProgressUpdate(string.Format("Reprocessing summary for {0}: Success {1} Fail {2}",
+                    resLoop.ApiName, resLoop.SuccessCount, resLoop.FailCount));
+            }
+            ProgressUpdate("************************************************");
+
+            return res;
+        }
+
+
+
+        private void UpdateRecursiveField(string apiName, List<ObjectTransformer.sObjectWrapper> workingList, string recursiveRelationshipField)
+        {
+            logger.DebugFormat("Object {0} has a recursive relation field {1}, now doing second pass to set it....",
+                apiName, recursiveRelationshipField);
+
+            // make a new list of sObjects to do the update
+            List<sObject> updateList = new List<sObject>();
+            foreach (var wrapLoop in workingList)
+            {
+                if (!string.IsNullOrEmpty(wrapLoop.RecursiveRelationshipOriginalId))
+                {
+                    var updateObject = CreateSobjectWithLookup(apiName, apiName, recursiveRelationshipField,
+                        new KeyValuePair<string, string>(wrapLoop.NewId, wrapLoop.RecursiveRelationshipOriginalId));
+
+                    if (updateObject != null)
+                    {
+                        updateList.Add(updateObject);
+                    }
+                }
+            }
+
+            logger.DebugFormat("{0} rows in Object {1} have recursive relation {2} to update ....",
+                updateList.Count(), apiName, recursiveRelationshipField);
+
+            var result = UpdateRecords(apiName, updateList);
+        }
+
+        /// <summary>
+        /// Reprocesses lookup relationship fields that were missed during the initial import and
+        /// populates them, once all the records are loaded into the sandbox. Similar to 
+        /// UpdateRecursiveField.
+        /// </summary>
+        private PopulateSandboxResult ReprocessObjects(List<ObjectTransformer> objectsToReprocess)
+        {
+            var results = new PopulateSandboxResult();
+
+            foreach (var obj in objectsToReprocess)
             {
                 foreach (var field in obj.LookupsToReprocess)
                 {
+                    ProgressUpdate(string.Format("Reprocessing referenced objects for {0} field {1}",
+                        field.ObjectName, field.FieldName));
+
                     List<sObject> updateList = new List<sObject>();
-                    foreach(var idPair in field.IdPairs)
+                    foreach (var idPair in field.IdPairs)
                     {
                         var updateObj = CreateSobjectWithLookup(field.ObjectName,
                             field.RelatedObjectName, field.FieldName, idPair);
@@ -227,30 +289,21 @@ namespace SandboxberryLib
                         }
                     }
 
-                    ProgressUpdate(string.Format("Reprocessing {0} {1} records",
-                        updateList.Count, field.ObjectName));
-
                     // switch the IDs with the new ones in the sandbox
                     foreach (sObject rowLoop in updateList)
                     {
                         rowLoop.Id = _relationMapper.RecallNewId(field.ObjectName, rowLoop.Id);
                     }
 
+                    ProgressUpdate(string.Format("Updating {0} {1} records",
+                        updateList.Count, field.ObjectName));
+
                     var result = UpdateRecords(field.ObjectName, updateList);
+                    results.ObjectResults.Add(result);
                 }
             }
 
-            // log summary
-            ProgressUpdate("************************************************");
-            foreach (var resLoop in res.ObjectResults)
-            {
-                ProgressUpdate(string.Format("Summary for {0}: Success {1} Fail {2}",
-                 resLoop.ApiName, resLoop.SuccessCount, resLoop.FailCount));
-
-            }
-            ProgressUpdate("************************************************");
-            
-            return res;
+            return results;
         }
 
         /// <summary>
@@ -285,43 +338,14 @@ namespace SandboxberryLib
             }
         }
 
-
-
-
-
-        private void UpdateRecursiveField(string apiName, List<ObjectTransformer.sObjectWrapper> workingList, string recursiveRelationshipField)
-        {
-            logger.DebugFormat("Object {0} has a recursive relation field {1}, now doing second pass to set it....",
-                apiName, recursiveRelationshipField);
-
-            // make a new list of sObjects to do the update
-            List<sObject> updateList = new List<sObject>();
-            foreach (var wrapLoop in workingList)
-            {
-                if (!string.IsNullOrEmpty(wrapLoop.RecursiveRelationshipOriginalId))
-                {
-                    var updateObject = CreateSobjectWithLookup(apiName, apiName, recursiveRelationshipField,
-                        new KeyValuePair<string, string>(wrapLoop.NewId, wrapLoop.RecursiveRelationshipOriginalId));
-
-                    if (updateObject != null)
-                    {
-                        updateList.Add(updateObject);
-                    }
-                }
-            }
-
-            logger.DebugFormat("{0} rows in Object {1} have recursive relation {2} to update ....",
-                updateList.Count(), apiName, recursiveRelationshipField);
-
-            var result = UpdateRecords(apiName, updateList);
-        }
-
         /// <summary>
         /// Updates a list of sobject records
         /// </summary>
         private PopulateObjectResult UpdateRecords(string objectName, List<sObject> updateList)
         {
             var result = new PopulateObjectResult();
+            result.ApiName = objectName;
+
             int done = 0;
             bool allDone = false;
             if (updateList.Count == 0)
