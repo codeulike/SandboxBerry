@@ -7,7 +7,7 @@ During Salesforce development you will generally create Sandboxes based on your 
 do development in the Sandbox. Most Salesforce Sandboxes are blank (except for the more expensive ones). Generally to do
 some development you're going to want some data in there, for example
 
-* Any reference tables/objects you've created (e.g. Country__c - a list of countries)
+* Any reference tables/objects you've created (e.g. Geo_Country__c - a list of countries)
 * Some sample data in the main tables to experiment with during development.
 
 So ... you can try and copy some data accross using DataLoader or an ETL tool, but you'll quickly find:
