@@ -166,11 +166,25 @@ namespace SandboxberryLib
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Gets data for all columns of an sobject
+        /// </summary>
         public List<sObject> GetDataFromSObject(string sobjectName, string filter)
         {
-            LoginIfRequired();
             List<string> colNames = RemoveSystemColumns(GetObjectColumns(sobjectName));
             string soql = BuildQuery(sobjectName, colNames, filter);
+            List<sObject> allResults = GetDataFromSObject(sobjectName, colNames, filter);
+            return allResults;
+        }
+
+        /// <summary>
+        /// Gets data for specified columns of an sobject
+        /// </summary>
+        public List<sObject> GetDataFromSObject(string sobjectName, List<string> colList, string filter)
+        {
+            LoginIfRequired();
+            colList = RemoveSystemColumns(colList);
+            string soql = BuildQuery(sobjectName, colList, filter);
 
             bool allResultsReturned = false;
             List<sObject> allResults = new List<sObject>();

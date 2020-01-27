@@ -38,6 +38,12 @@ namespace SandboxberryLib
 
         public Dictionary<string, string> ObjectRelationships { get; set; }
 
+        /// <summary>
+        /// Lookups that will need to be reprocessed later as the referenced objects didn't exist
+        /// yet when the wrapped object was created
+        /// </summary>
+        public List<LookupInfo> LookupsToReprocess { get; set; }
+
         public List<string> InactiveUserIds { get; set; }
 
         public List<string> MissingUserIds { get; set; }
@@ -51,6 +57,12 @@ namespace SandboxberryLib
             CorrectInactiveUser(wrap.sObj, this.InactiveUserIds, this.CurrentUserId);
             if (this.RecursiveRelationshipField != null)
                 RememberRecursiveId(wrap, this.RecursiveRelationshipField);
+
+            foreach(var lookup in this.LookupsToReprocess)
+            {
+                RemeberLookupIdsToReprocess(lookup, wrap.sObj);
+            }
+
             FixRelatedIds(wrap.sObj, this.ObjectRelationships);
             RemoveIdFromSObject(wrap.sObj);
 
@@ -169,7 +181,19 @@ namespace SandboxberryLib
 
         }
 
+        /// <summary>
+        /// Remember IDs to reprocess later for this lookup relationship
+        /// </summary>
+        private void RemeberLookupIdsToReprocess(LookupInfo lookup, sObject obj)
+        {
+            var lookupField = obj.Any.FirstOrDefault(e => e.LocalName == lookup.FieldName);
+            var relatedId = lookupField.InnerText;
 
+            if (!String.IsNullOrEmpty(relatedId))
+            {
+                lookup.IdPairs.Add(new KeyValuePair<string, string>(obj.Id, relatedId));
+            }
+        }
 
         public class sObjectWrapper
         {
