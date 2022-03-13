@@ -16,7 +16,6 @@ namespace SandboxberryTests
     {
         private static readonly ILog logger = LogManager.GetLogger(typeof(GeneralTests));
 
-
         [TestMethod]
         public void CanBuildQuery()
         {
@@ -27,7 +26,7 @@ namespace SandboxberryTests
 
             SalesforceTasks tasks = new SalesforceTasks(TestUtils.MakeDummyCredentials());
 
-            var res = tasks.BuildQuery("Madeup__c", pretendCols, null);
+            var res = tasks.BuildQuery("Madeup__c", pretendCols, null, null);
             Assert.AreEqual(res, "select Id, Name, Something__c from Madeup__c");
         }
 
@@ -41,7 +40,7 @@ namespace SandboxberryTests
 
             SalesforceTasks tasks = new SalesforceTasks(TestUtils.MakeDummyCredentials());
 
-            var res = tasks.BuildQuery("Madeup__c", pretendCols, "Something__c = 'a'");
+            var res = tasks.BuildQuery("Madeup__c", pretendCols, "Something__c = 'a'", null);
             Assert.AreEqual(res, "select Id, Name, Something__c from Madeup__c where Something__c = 'a'");
         }
 
@@ -76,15 +75,12 @@ namespace SandboxberryTests
         [TestMethod]
         public void CanSerializeInstructions()
         {
-
             string[] tables = {"Country__c","Nationality__c",
                        "Account", "Client__c" };
-
 
             SbbInstructionSet inst = TestUtils.MakeInstructionSet(tables.ToList());
             inst.SbbObjects.First(o => o.ApiName == "Account").Filter = "Help_Sandbox_Data_Set__c = true";
             inst.SbbObjects.First(o => o.ApiName == "Client__c").Filter = "account__r.Help_Sandbox_Data_Set__c = true";
-
 
             var baseDir = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             var testFile = System.IO.Path.Combine(baseDir, "testinstructions.xml");
@@ -100,9 +96,6 @@ namespace SandboxberryTests
             foreach (var n in names)
                 logger.DebugFormat("Resource: {0}", n);
 
-
         }
-
-
     }
 }
