@@ -15,15 +15,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using log4net;
 using SandboxberryLib.InstructionsModel;
 using SandboxberryLib.ResultsModel;
 using SandboxberryLib.SalesforcePartnerApi;
-using log4net;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Xml;
 
 namespace SandboxberryLib
@@ -31,7 +29,6 @@ namespace SandboxberryLib
     public class PopulateSandbox
     {
         private static readonly ILog logger = LogManager.GetLogger(typeof(PopulateSandbox));
-
 
         private SalesforceTasks _sourceTasks;
         private SalesforceTasks _targetTasks;
@@ -41,17 +38,15 @@ namespace SandboxberryLib
 
         private IProgress<string> _progress;
 
-        public PopulateSandbox(SbbInstructionSet instructions):this(instructions, new RelationMapper())
+        public PopulateSandbox(SbbInstructionSet instructions) : this(instructions, new RelationMapper())
         {
         }
-
         public PopulateSandbox(SbbInstructionSet instructions, RelationMapper relMapper)
         {
             _sourceTasks = new SalesforceTasks(instructions.SourceCredentials);
             _targetTasks = new SalesforceTasks(instructions.TargetCredentuals);
             _instructions = instructions;
             _relationMapper = relMapper;
-
         }
 
         public PopulateSandboxResult Start()
@@ -68,7 +63,6 @@ namespace SandboxberryLib
             else
                 _progress.Report(message);
         }
-
         public PopulateSandboxResult Start(IProgress<string> progress)
         {
             _progress = progress;
@@ -86,6 +80,8 @@ namespace SandboxberryLib
             var targetUserIds = _targetTasks.GetAllUsers();
             var missingUserIds = sourceUserIds.Except(targetUserIds).ToList();
             logger.DebugFormat("Found {0} users in Source that are not in Target", missingUserIds.Count());
+            var processedObjects = new List<String> { "User" }; // user is copied already
+            var objectsToReprocess = new List<ObjectTransformer>();
 
             foreach (SbbObject objLoop in _instructions.SbbObjects)
             {
@@ -103,21 +99,46 @@ namespace SandboxberryLib
 
                 transformer.ObjectRelationships = _sourceTasks.GetObjectRelationships(objLoop.ApiName);
                 transformer.RecursiveRelationshipField = transformer.ObjectRelationships.FirstOrDefault(d => d.Value == objLoop.ApiName).Key;
+
                 if (transformer.RecursiveRelationshipField != null)
                     logger.DebugFormat("Object {0} has a recurive relation to iteself in field {1}",
                         objLoop.ApiName, transformer.RecursiveRelationshipField);
 
+                // find lookups on this object that can't be populated, to reprocess later
+                transformer.LookupsToReprocess = transformer.ObjectRelationships
+                    .Where(d => d.Value != objLoop.ApiName)          // where it's not a recursive relationship
+                    .Where(d => !processedObjects.Contains(d.Value)) // and the referenced record doesn't exist yet
+                    .Where(d => !objLoop.SbbFieldOptions.Any(        // and it's not one of the skipped fields
+                                e => e.ApiName.Equals(d.Key)
+                                     && e.Skip))
+                    // TODO: but is still one of the included object types (e.g. not Contact -> "rh2__PS_Describe__c")
+                    .Select(d => new LookupInfo
+                    {
+                        FieldName = d.Key,
+                        ObjectName = objLoop.ApiName,
+                        RelatedObjectName = d.Value
+                    })
+                    .ToList();
+
+                if (transformer.LookupsToReprocess.Count > 0)
+                {
+                    objectsToReprocess.Add(transformer);
+                    var fields = transformer.LookupsToReprocess.Select(lookup => lookup.FieldName);
+                    logger.DebugFormat("Object {0} has lookups that will need to be reprocessed: {1}",
+                        objLoop.ApiName,
+                        String.Join(", ", fields));
+                }
 
                 List<sObject> sourceData = null;
                 try
                 {
-                    sourceData = _sourceTasks.GetDataFromSObject(objLoop.ApiName, objLoop.Filter);
+                    sourceData = _sourceTasks.GetDataFromSObject(objLoop.ApiName, objLoop.Filter, objLoop.Limit);
                 }
                 catch (Exception e)
                 {
                     string errMess = string.Format("Error while fetching data for {0}: {1}", objLoop.ApiName, e.Message);
                     throw new ApplicationException(errMess, e);
-                }  
+                }
                 objres.SourceRows = sourceData.Count();
                 ProgressUpdate(string.Format("Received {0} {1} records from source", sourceData.Count, objLoop.ApiName));
 
@@ -131,7 +152,7 @@ namespace SandboxberryLib
 
                     transformer.ApplyTransformations(wrap);
 
-                    
+
                     workingList.Add(wrap);
                 }
 
@@ -168,7 +189,7 @@ namespace SandboxberryLib
                         }
 
                     }
-                   
+
                 }
 
                 // inserts done.
@@ -179,8 +200,11 @@ namespace SandboxberryLib
 
                 ProgressUpdate(string.Format("Summary for {0}: Success {1} Fail {2}",
                     objLoop.ApiName, objres.SuccessCount, objres.FailCount));
-
+                processedObjects.Add(objLoop.ApiName);
             }
+
+            // reprocess lookup relationships that can be populated now that the inserts are done
+            var reprocessingResults = ReprocessObjects(objectsToReprocess);
 
             // log summary
             ProgressUpdate("************************************************");
@@ -190,16 +214,17 @@ namespace SandboxberryLib
                  resLoop.ApiName, resLoop.SuccessCount, resLoop.FailCount));
 
             }
+
+            // log reprocssing summary
+            foreach (var resLoop in reprocessingResults.ObjectResults)
+            {
+                ProgressUpdate(string.Format("Reprocessing summary for {0}: Success {1} Fail {2}",
+                    resLoop.ApiName, resLoop.SuccessCount, resLoop.FailCount));
+            }
             ProgressUpdate("************************************************");
-            
+
             return res;
         }
-
-      
-
-        
-
-
         private void UpdateRecursiveField(string apiName, List<ObjectTransformer.sObjectWrapper> workingList, string recursiveRelationshipField)
         {
             logger.DebugFormat("Object {0} has a recursive relation field {1}, now doing second pass to set it....",
@@ -211,39 +236,107 @@ namespace SandboxberryLib
             {
                 if (!string.IsNullOrEmpty(wrapLoop.RecursiveRelationshipOriginalId))
                 {
-                    var upd = new sObject();
+                    var updateObject = CreateSobjectWithLookup(apiName, apiName, recursiveRelationshipField,
+                        new KeyValuePair<string, string>(wrapLoop.NewId, wrapLoop.RecursiveRelationshipOriginalId));
 
-                    upd.type = wrapLoop.sObj.type;
-                    upd.Id = wrapLoop.NewId;
-                    XmlDocument dummydoc = new XmlDocument();
-                    XmlElement recursiveEl = dummydoc.CreateElement(recursiveRelationshipField);
-
-                    string replaceValue = _relationMapper.RecallNewId(apiName, wrapLoop.RecursiveRelationshipOriginalId);
-
-                    if (replaceValue == null)
+                    if (updateObject != null)
                     {
-                        logger.DebugFormat("Object {0} {1} recursive field {2} have value {3} could not translate - will ignore",
-                           apiName, wrapLoop.OriginalId, recursiveRelationshipField, wrapLoop.RecursiveRelationshipOriginalId);
-                    }
-                    else
-                    {
-
-                        recursiveEl.InnerText = replaceValue;
-
-                        upd.Any = new XmlElement[] { recursiveEl };
-
-                        updateList.Add(upd);
+                        updateList.Add(updateObject);
                     }
                 }
-
             }
 
             logger.DebugFormat("{0} rows in Object {1} have recursive relation {2} to update ....",
                 updateList.Count(), apiName, recursiveRelationshipField);
 
-            // update objects in batches
-            int successCount = 0;
-            int failCount = 0;
+            var result = UpdateRecords(apiName, updateList);
+        }
+
+        /// <summary>
+        /// Reprocesses lookup relationship fields that were missed during the initial import and
+        /// populates them, once all the records are loaded into the sandbox. Similar to 
+        /// UpdateRecursiveField.
+        /// </summary>
+        private PopulateSandboxResult ReprocessObjects(List<ObjectTransformer> objectsToReprocess)
+        {
+            var results = new PopulateSandboxResult();
+
+            foreach (var obj in objectsToReprocess)
+            {
+                foreach (var field in obj.LookupsToReprocess)
+                {
+                    ProgressUpdate(string.Format("Reprocessing referenced objects for {0} field {1}",
+                        field.ObjectName, field.FieldName));
+
+                    List<sObject> updateList = new List<sObject>();
+                    foreach (var idPair in field.IdPairs)
+                    {
+                        var updateObj = CreateSobjectWithLookup(field.ObjectName,
+                            field.RelatedObjectName, field.FieldName, idPair);
+
+                        if (updateObj != null)
+                        {
+                            updateList.Add(updateObj);
+                        }
+                    }
+
+                    // switch the IDs with the new ones in the sandbox
+                    foreach (sObject rowLoop in updateList)
+                    {
+                        rowLoop.Id = _relationMapper.RecallNewId(field.ObjectName, rowLoop.Id);
+                    }
+
+                    ProgressUpdate(string.Format("Updating {0} {1} records",
+                        updateList.Count, field.ObjectName));
+
+                    var result = UpdateRecords(field.ObjectName, updateList);
+                    results.ObjectResults.Add(result);
+                }
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Creates a new sObject record that only contains the specified lookup relationship field
+        /// and replaces IDs for the referenced objects
+        /// </summary>
+        /// <returns>The newly-constructed sObject with the correct referenced ID, otherwise null</returns>
+        private sObject CreateSobjectWithLookup(string objectName, string relatedObjectName,
+            string fieldName, KeyValuePair<string, string> idPair)
+        {
+            var newObject = new sObject
+            {
+                type = objectName,
+                Id = idPair.Key
+            };
+
+            XmlDocument dummydoc = new XmlDocument();
+            XmlElement recursiveEl = dummydoc.CreateElement(fieldName);
+            string replaceValue = _relationMapper.RecallNewId(relatedObjectName, idPair.Value);
+
+            if (replaceValue == null)
+            {
+                logger.DebugFormat("Object {0} {1} relationship field {2} have value {3} could not translate - will ignore",
+                   objectName, idPair.Key, fieldName, idPair.Value);
+                return null;
+            }
+            else
+            {
+                recursiveEl.InnerText = replaceValue;
+                newObject.Any = new XmlElement[] { recursiveEl };
+                return newObject;
+            }
+        }
+
+        /// <summary>
+        /// Updates a list of sobject records
+        /// </summary>
+        private PopulateObjectResult UpdateRecords(string objectName, List<sObject> updateList)
+        {
+            var result = new PopulateObjectResult();
+            result.ApiName = objectName;
+
             int done = 0;
             bool allDone = false;
             if (updateList.Count == 0)
@@ -255,38 +348,39 @@ namespace SandboxberryLib
                 if (done >= updateList.Count)
                     allDone = true;
 
-                var updateRes = _targetTasks.UpdateSObjects(apiName,
+                var updateRes = _targetTasks.UpdateSObjects(objectName,
                        batch.ToArray());
 
                 for (int i = 0; i < updateRes.Length; i++)
                 {
                     if (updateRes[i].Success)
                     {
-                        successCount+=1;
+                        result.SuccessCount += 1;
                     }
                     else
                     {
-                        
+
                         logger.WarnFormat("Error when updating {0} {1} in target: {2}",
-                            apiName, batch[i].Id, updateRes[i].ErrorMessage);
-                        failCount += 1;
+                            objectName, batch[i].Id, updateRes[i].ErrorMessage);
+                        result.FailCount += 1;
                     }
 
                 }
-                   
+
             }
-            logger.DebugFormat("Object {0} recursive relation {1} updated. Attempted {2} Success {3} Failed {4}",
-               apiName, recursiveRelationshipField, updateList.Count, successCount, failCount);
 
+            logger.DebugFormat("Object {0} updated. Attempted {1} Success {2} Failed {3}",
+               objectName, updateList.Count, result.SuccessCount, result.FailCount);
+
+            return result;
         }
-
         private void LoginToBoth()
         {
-            
+
             try
             {
                 _sourceTasks.LoginIfRequired();
-               
+
             }
             catch (Exception e)
             {
@@ -294,11 +388,11 @@ namespace SandboxberryLib
                     e.Message);
                 throw new ApplicationException(newMess, e);
             }
-            
+
             try
             {
                 _targetTasks.LoginIfRequired();
-               
+
             }
             catch (Exception e)
             {
@@ -307,19 +401,17 @@ namespace SandboxberryLib
                 throw new ApplicationException(newMess, e);
             }
         }
-
         public void DeleteTargetData()
         {
             this.DeleteTargetData(null, false);
         }
-
         public void DeleteTargetData(IProgress<string> progress, bool ignoreFilters)
         {
             _progress = progress;
             ProgressUpdate("Logging into Target ...");
             _targetTasks.LoginIfRequired();
             var reverseObjects = _instructions.SbbObjects.AsEnumerable().Reverse();
-            
+
             foreach (SbbObject objLoop in reverseObjects)
             {
                 String filter = objLoop.Filter;
@@ -335,9 +427,9 @@ namespace SandboxberryLib
                     filter = null;
                 }
                 ProgressUpdate(string.Format("Starting deletion for {0}, filter: {1}", objLoop.ApiName, filterInfo));
-                
 
-                var targetIds = _targetTasks.GetIdsFromSObject(objLoop.ApiName, filter);
+
+                var targetIds = _targetTasks.GetIdsFromSObject(objLoop.ApiName, filter, objLoop.Limit);
                 ProgressUpdate(string.Format("Received {0} {1} ids from target", targetIds.Count, objLoop.ApiName));
                 int done = 0;
                 bool allDone = false;
@@ -350,12 +442,10 @@ namespace SandboxberryLib
                     if (done >= targetIds.Count)
                         allDone = true;
                     _targetTasks.DeleteSObjects(objLoop.ApiName, idarray);
-                    
+
                 }
                 ProgressUpdate(string.Format("Deleted {0} {1} records from target", targetIds.Count, objLoop.ApiName));
-
             }
         }
-
     }
 }

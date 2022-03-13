@@ -15,14 +15,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+using log4net;
+using SandboxberryLib.InstructionsModel;
+using SandboxberryLib.SalesforcePartnerApi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using SandboxberryLib.SalesforcePartnerApi;
-using SandboxberryLib.InstructionsModel;
-using log4net;
 
 namespace SandboxberryLib
 {
@@ -34,7 +33,7 @@ namespace SandboxberryLib
         private SalesforceSession _salesforceSession;
         private SforceService _binding = null;
 
-        private Dictionary<string,DescribeSObjectResult> _metaDictionary;
+        private Dictionary<string, DescribeSObjectResult> _metaDictionary;
 
         public SalesforceTasks(SbbCredentials cred)
             : this(new SalesforceSession(cred))
@@ -44,10 +43,7 @@ namespace SandboxberryLib
         {
             _salesforceSession = sesh;
             _metaDictionary = new Dictionary<string, DescribeSObjectResult>();
-         
         }
-
-
         public void FetchObjectMetadata(string[] apiNameArray)
         {
             LoginIfRequired();
@@ -58,11 +54,8 @@ namespace SandboxberryLib
             {
                 if (!_metaDictionary.ContainsKey(metaLoop.name))
                     _metaDictionary.Add(metaLoop.name, metaLoop);
-
             }
-
         }
-
         public DescribeSObjectResult GetObjectMeta(string apiName)
         {
             if (!_metaDictionary.ContainsKey(apiName))
@@ -74,13 +67,12 @@ namespace SandboxberryLib
                 throw new ApplicationException(string.Format("Could not return metadata for type {0}", apiName));
             return _metaDictionary[apiName];
         }
-
-        public Dictionary<string,string> GetObjectRelationships(string apiName)
+        public Dictionary<string, string> GetObjectRelationships(string apiName)
         {
             var res = new Dictionary<string, string>();
             var meta = GetObjectMeta(apiName);
             var fieldsWeUse = RemoveSystemColumns(GetObjectColumns(apiName));
-            
+
             var relationshipFields = meta.fields.Where(f => f.relationshipName != null);
             foreach (var fieldLoop in relationshipFields)
             {
@@ -124,20 +116,17 @@ namespace SandboxberryLib
             }
             return res;
         }
-
         public List<string> GetObjectColumns(string objName)
         {
-            
+
             var meta = GetObjectMeta(objName);
             List<string> fieldNames = meta.fields.Where(f => f.autoNumber == false && f.calculated == false && f.type != fieldType.address && (f.createable == true || f.name == "Id")).Select(f => f.name).ToList<string>();
-                
-            return fieldNames;
-            
-        }
 
+            return fieldNames;
+        }
         public List<string> RemoveSystemColumns(List<string> colNameList)
         {
-            List<string> unwantedCols = new string[] { 
+            List<string> unwantedCols = new string[] {
                             "IsDeleted",
                             "CreatedDate",
                             "CreatedById",
@@ -148,29 +137,47 @@ namespace SandboxberryLib
                             "LastReferencedDate"}.ToList();
             return colNameList.Except(unwantedCols).ToList();
         }
-
         public void LoginIfRequired()
         {
             if (_binding == null)
                 _binding = _salesforceSession.Login();
-
         }
-
-        public string BuildQuery(string sobjectName, List<string> colList, string filter)
+        public string BuildQuery(string sobjectName, List<string> colList, string filter, string limit)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendFormat("select {0} from {1}",
                 String.Join(", ", colList), sobjectName);
             if (!string.IsNullOrEmpty(filter))
-                sb.AppendFormat(" where {0}", filter);
+            {  
+              sb.AppendFormat(" where {0}", filter);   
+            }
+            if (!string.IsNullOrEmpty(limit))
+            {
+                sb.AppendFormat(" limit {0}", limit);
+            }
+
             return sb.ToString();
         }
 
-        public List<sObject> GetDataFromSObject(string sobjectName, string filter)
+        /// <summary>
+        /// Gets data for all columns of an sobject
+        /// </summary>
+        public List<sObject> GetDataFromSObject(string sobjectName, string filter, string limit)
+        {
+            List<string> colNames = RemoveSystemColumns(GetObjectColumns(sobjectName));
+            string soql = BuildQuery(sobjectName, colNames, filter, limit);
+            List<sObject> allResults = GetDataFromSObject(sobjectName, colNames, filter, limit);
+            return allResults;
+        }
+
+        /// <summary>
+        /// Gets data for specified columns of an sobject
+        /// </summary>
+        public List<sObject> GetDataFromSObject(string sobjectName, List<string> colList, string filter, string limit)
         {
             LoginIfRequired();
-            List<string> colNames = RemoveSystemColumns(GetObjectColumns(sobjectName));
-            string soql = BuildQuery(sobjectName, colNames, filter);
+            colList = RemoveSystemColumns(colList);
+            string soql = BuildQuery(sobjectName, colList, filter, limit);
 
             bool allResultsReturned = false;
             List<sObject> allResults = new List<sObject>();
@@ -189,12 +196,11 @@ namespace SandboxberryLib
 
             return allResults;
         }
-
-        public List<string> GetIdsFromSObject(string sobjectName, string filter)
+        public List<string> GetIdsFromSObject(string sobjectName, string filter, string limit)
         {
             LoginIfRequired();
-            
-            string soql = BuildQuery(sobjectName, new string[] {"Id"}.ToList(), filter);
+
+            string soql = BuildQuery(sobjectName, new string[] { "Id" }.ToList(), filter, limit);
 
             List<string> allResults = FetchQueryDataIdOnly(soql);
 
@@ -219,22 +225,21 @@ namespace SandboxberryLib
             }
             return allResults;
         }
-
         public string InsertSObject(string sobjectName, sObject obj)
         {
 
             LoginIfRequired();
-            sObject[] objArray = new sObject[]{ obj};
+            sObject[] objArray = new sObject[] { obj };
             var saveResults = _binding.create(objArray);
 
             CheckSaveResults(saveResults, string.Format("Creation of {0}", sobjectName), true);
-            
+
             if (saveResults.Length != 1)
                 throw new ApplicationException(string.Format("Expected one saveresult back for creation of {0} but got {1}",
                     sobjectName, saveResults.Length));
 
             var rowResult = saveResults[0];
-            
+
 
             return rowResult.id;
         }
@@ -261,7 +266,6 @@ namespace SandboxberryLib
 
             return res;
         }
-
         public UpdateSObjectsResult[] UpdateSObjects(string sobjectName, sObject[] objArray)
         {
 
@@ -284,20 +288,16 @@ namespace SandboxberryLib
 
             return res;
         }
-
-
         public class InsertSObjectsResult
         {
             public string NewId { get; set; }
             public string ErrorMessage { get; set; }
         }
-
         public class UpdateSObjectsResult
         {
             public bool Success { get; set; }
             public string ErrorMessage { get; set; }
         }
-
         public void DeleteSObjects(string sobjectName, string[] idarray)
         {
             LoginIfRequired();
@@ -327,35 +327,28 @@ namespace SandboxberryLib
             }
             logger.DebugFormat("deletion of {0} - {1} success {2} failed",
                 sobjectName, successCount, errorCount);
-            if (errorCount>0)
+            if (errorCount > 0)
                 throw new ApplicationException(string.Format("deletion of {0} - {1} failed {2}",
                     sobjectName, errorCount, string.Join(", ", errorMessages)));
-                
 
         }
-
-        
-
         public List<string> GetInactiveUsers()
         {
             LoginIfRequired();
             string soql = "Select id from user where isActive=False";
             return FetchQueryDataIdOnly(soql);
         }
-
         public List<string> GetAllUsers()
         {
             LoginIfRequired();
             string soql = "Select id from user";
             return FetchQueryDataIdOnly(soql);
         }
-
         public string GetCurrentUserId()
         {
             LoginIfRequired();
             return _binding.getUserInfo().userId;
         }
-
         public bool CheckSaveResults(SaveResult[] saveResults, string contextForLog, bool throwError)
         {
             bool allOK = true;
@@ -377,7 +370,6 @@ namespace SandboxberryLib
                 throw new ApplicationException(string.Join(", ", errorSummaries));
             return allOK;
         }
-
         private string GetSaveResultErrorText(SaveResult saveResult)
         {
             StringBuilder sb = new StringBuilder();
@@ -391,7 +383,5 @@ namespace SandboxberryLib
             }
             return sb.ToString();
         }
-
-
     }
 }

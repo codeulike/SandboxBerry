@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -9,8 +9,9 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SandboxberryLib</RootNamespace>
     <AssemblyName>SandboxberryLib</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -30,13 +31,14 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="log4net">
-      <HintPath>..\packages\log4net.2.0.3\lib\net40-full\log4net.dll</HintPath>
+    <Reference Include="log4net, Version=2.0.14.0, Culture=neutral, PublicKeyToken=669e0ddf0bb1aa2a, processorArchitecture=MSIL">
+      <HintPath>..\packages\log4net.2.0.14\lib\net45\log4net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.EnterpriseServices" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Web.Services" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -58,6 +60,7 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
     <Compile Include="RelationMapper.cs" />
+    <Compile Include="ResultsModel\LookupInfo.cs" />
     <Compile Include="ResultsModel\PopulateObjectResult.cs" />
     <Compile Include="ResultsModel\PopulateSandboxResult.cs" />
     <Compile Include="ResultsModel\RowFailInfo.cs" />
@@ -76,19 +79,6 @@
     <WebReferences Include="Web References\" />
   </ItemGroup>
   <ItemGroup>
-    <WebReferenceUrl Include="D:\Codeulike\Code\SandboxberrySol\SandboxberryLib\SalesforceWsdl\partner.wsdl">
-      <UrlBehavior>Dynamic</UrlBehavior>
-      <RelPath>Web References\SalesforcePartnerApi\</RelPath>
-      <UpdateFromURL>D:\Codeulike\Code\SandboxberrySol\SandboxberryLib\SalesforceWsdl\partner.wsdl</UpdateFromURL>
-      <ServiceLocationURL>
-      </ServiceLocationURL>
-      <CachedDynamicPropName>
-      </CachedDynamicPropName>
-      <CachedAppSettingsObjectName>Settings</CachedAppSettingsObjectName>
-      <CachedSettingsPropName>SandboxberryLib_SalesforcePartnerApi_SforceService</CachedSettingsPropName>
-    </WebReferenceUrl>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="app.config" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
@@ -98,6 +88,12 @@
     <EmbeddedResource Include="Resources\SbbInstructionSetSchema.xsd">
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <None Include="Web References\SalesforcePartnerApi\ChangeOwnPasswordResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
+    <None Include="Web References\SalesforcePartnerApi\DeleteByExampleResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
     <None Include="Web References\SalesforcePartnerApi\DeleteResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
@@ -122,7 +118,7 @@
     <None Include="Web References\SalesforcePartnerApi\DescribeDataCategoryGroupStructureResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
-    <None Include="Web References\SalesforcePartnerApi\DescribeFlexiPageResult.datasource">
+    <None Include="Web References\SalesforcePartnerApi\DescribeDataCategoryMappingResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
     <None Include="Web References\SalesforcePartnerApi\DescribeGlobalResult.datasource">
@@ -134,7 +130,16 @@
     <None Include="Web References\SalesforcePartnerApi\DescribeLayoutResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
+    <None Include="Web References\SalesforcePartnerApi\DescribeNounResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
+    <None Include="Web References\SalesforcePartnerApi\DescribePathAssistant.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
     <None Include="Web References\SalesforcePartnerApi\DescribeQuickActionResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
+    <None Include="Web References\SalesforcePartnerApi\DescribeSearchableEntityResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
     <None Include="Web References\SalesforcePartnerApi\DescribeSearchLayoutResult.datasource">
@@ -161,10 +166,16 @@
     <None Include="Web References\SalesforcePartnerApi\DescribeThemeItem.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
+    <None Include="Web References\SalesforcePartnerApi\DescribeVisualForceResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
     <None Include="Web References\SalesforcePartnerApi\EmptyRecycleBinResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
     <None Include="Web References\SalesforcePartnerApi\ExecuteListViewResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
+    <None Include="Web References\SalesforcePartnerApi\FindDuplicatesResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
     <None Include="Web References\SalesforcePartnerApi\GetDeletedResult.datasource">
@@ -194,7 +205,6 @@
     <None Include="Web References\SalesforcePartnerApi\MergeResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
-    <None Include="Web References\SalesforcePartnerApi\partner.wsdl" />
     <None Include="Web References\SalesforcePartnerApi\PerformQuickActionResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
@@ -210,6 +220,12 @@
     <None Include="Web References\SalesforcePartnerApi\Reference.map">
       <Generator>MSDiscoCodeGenerator</Generator>
       <LastGenOutput>Reference.cs</LastGenOutput>
+    </None>
+    <None Include="Web References\SalesforcePartnerApi\RenderEmailTemplateResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
+    </None>
+    <None Include="Web References\SalesforcePartnerApi\RenderStoredEmailTemplateResult.datasource">
+      <DependentUpon>Reference.map</DependentUpon>
     </None>
     <None Include="Web References\SalesforcePartnerApi\ResetPasswordResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
@@ -235,8 +251,21 @@
     <None Include="Web References\SalesforcePartnerApi\UpsertResult.datasource">
       <DependentUpon>Reference.map</DependentUpon>
     </None>
+    <None Include="Web References\SalesforcePartnerApi\wsdl.wsdl" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <WebReferenceUrl Include="https://ampion123--staging.my.salesforce.com/soap/wsdl.jsp">
+      <UrlBehavior>Dynamic</UrlBehavior>
+      <RelPath>Web References\SalesforcePartnerApi\</RelPath>
+      <UpdateFromURL>https://ampion123--staging.my.salesforce.com/soap/wsdl.jsp</UpdateFromURL>
+      <ServiceLocationURL>
+      </ServiceLocationURL>
+      <CachedDynamicPropName>
+      </CachedDynamicPropName>
+      <CachedAppSettingsObjectName>Settings</CachedAppSettingsObjectName>
+      <CachedSettingsPropName>SandboxberryLib_SalesforcePartnerApi_SforceService</CachedSettingsPropName>
+    </WebReferenceUrl>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

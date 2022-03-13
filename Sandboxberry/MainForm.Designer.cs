@@ -260,13 +260,13 @@
             this.toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.clearTargetDataToolStripMenuItem});
             this.toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
-            this.toolsToolStripMenuItem.Size = new System.Drawing.Size(48, 22);
+            this.toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 22);
             this.toolsToolStripMenuItem.Text = "Tools";
             // 
             // clearTargetDataToolStripMenuItem
             // 
             this.clearTargetDataToolStripMenuItem.Name = "clearTargetDataToolStripMenuItem";
-            this.clearTargetDataToolStripMenuItem.Size = new System.Drawing.Size(177, 22);
+            this.clearTargetDataToolStripMenuItem.Size = new System.Drawing.Size(175, 22);
             this.clearTargetDataToolStripMenuItem.Text = "Clear Target Data ...";
             this.clearTargetDataToolStripMenuItem.Click += new System.EventHandler(this.clearTargetDataToolStripMenuItem_Click);
             // 
