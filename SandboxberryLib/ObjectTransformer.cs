@@ -38,6 +38,12 @@ namespace SandboxberryLib
 
         public Dictionary<string, string> ObjectRelationships { get; set; }
 
+        /// <summary>
+        /// Lookups that will need to be reprocessed later as the referenced objects didn't exist
+        /// yet when the wrapped object was created
+        /// </summary>
+        public List<LookupInfo> LookupsToReprocess { get; set; }
+
         public List<string> InactiveUserIds { get; set; }
 
         public List<string> MissingUserIds { get; set; }
@@ -51,6 +57,12 @@ namespace SandboxberryLib
             CorrectInactiveUser(wrap.sObj, this.InactiveUserIds, this.CurrentUserId);
             if (this.RecursiveRelationshipField != null)
                 RememberRecursiveId(wrap, this.RecursiveRelationshipField);
+
+            foreach (var lookup in this.LookupsToReprocess)
+            {
+                RemeberLookupIdsToReprocess(lookup, wrap.sObj);
+            }
+
             FixRelatedIds(wrap.sObj, this.ObjectRelationships);
             RemoveIdFromSObject(wrap.sObj);
 
@@ -76,13 +88,8 @@ namespace SandboxberryLib
                         wrap.sObj.Any = wrap.sObj.Any.Where(f => f.LocalName != fieldOptions.ApiName).ToArray();
                     }
                 }
-                
             }
-
         }
-
-
-
         public void CorrectInactiveUser(sObject obj, List<string> inactiveUserIds, string replacementUserID)
         {
             XmlElement ownerNode = obj.Any.FirstOrDefault(e => e.LocalName == "OwnerId");
@@ -99,10 +106,7 @@ namespace SandboxberryLib
 
                 ownerNode.InnerText = replacementUserID;
             }
-
-
         }
-
         public void FixRelatedIds(sObject obj, Dictionary<string, string> objectRelationships)
         {
             foreach (string fieldName in objectRelationships.Keys)
@@ -115,7 +119,6 @@ namespace SandboxberryLib
                         obj.type, obj.Id, fieldName);
                     continue;
                 }
-
 
                 string currentValue = relatedIdNode.InnerText;
                 if (!string.IsNullOrEmpty(currentValue))
@@ -148,29 +151,34 @@ namespace SandboxberryLib
                         }
                     }
                 }
-
-
             }
-
         }
 
         public void RemoveIdFromSObject(sObject obj)
         {
             obj.Any = obj.Any.Where(e => e.LocalName != "Id").ToArray();
             obj.Id = null;
-
         }
 
         private void RememberRecursiveId(ObjectTransformer.sObjectWrapper wrap, string recursiveField)
         {
             XmlElement recursiveNode = wrap.sObj.Any.FirstOrDefault(e => e.LocalName == recursiveField);
             wrap.RecursiveRelationshipOriginalId = recursiveNode.InnerText;
-
-
         }
 
+        /// <summary>
+        /// Remember IDs to reprocess later for this lookup relationship
+        /// </summary>
+        private void RemeberLookupIdsToReprocess(LookupInfo lookup, sObject obj)
+        {
+            var lookupField = obj.Any.FirstOrDefault(e => e.LocalName == lookup.FieldName);
+            var relatedId = lookupField.InnerText;
 
-
+            if (!String.IsNullOrEmpty(relatedId))
+            {
+                lookup.IdPairs.Add(new KeyValuePair<string, string>(obj.Id, relatedId));
+            }
+        }
         public class sObjectWrapper
         {
             public string OriginalId { get; set; }
@@ -181,6 +189,5 @@ namespace SandboxberryLib
             public string RecursiveRelationshipField { get; set; }
             public string RecursiveRelationshipOriginalId { get; set; }
         }
-
     }
 }

@@ -15,20 +15,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 using log4net;
-
+using Sandboxberry.Properties;
 using SandboxberryLib;
 using SandboxberryLib.InstructionsModel;
-using Sandboxberry.Properties;
+using System;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace Sandboxberry
 {
@@ -55,17 +48,16 @@ namespace Sandboxberry
             {
                 c.Enabled = false;
             }
-
-            
         }
 
         public void SaveUserSettings()
-        {
-            
+        {   
             Settings.Default["SetSourceUrl"] = uxSourceUrl.SelectedIndex;
             Settings.Default["SetSourceUsername"] = uxSourceUsername.Text;
+            Settings.Default["SetSourcePassword"] = uxSourcePassword.Text;
             Settings.Default["SetTargetUrl"] = uxTargetUrl.SelectedIndex;
             Settings.Default["SetTargetUsername"] = uxTargetUsername.Text;
+            Settings.Default["SetTargetPassword"] = uxTargetPassword.Text;
             Settings.Default["SetInstructionsFile"] = uxInstructionsFilename.Text;
             Settings.Default.Save();
         }
@@ -78,8 +70,10 @@ namespace Sandboxberry
                 {
                     uxSourceUrl.SelectedIndex = (int)(Settings.Default["SetSourceUrl"]);
                     uxSourceUsername.Text = Settings.Default["SetSourceUsername"].ToString();
+                    uxSourcePassword.Text = Settings.Default["SetSourcePassword"].ToString();
                     uxTargetUrl.SelectedIndex = (int)(Settings.Default["SetTargetUrl"]);
                     uxTargetUsername.Text = Settings.Default["SetTargetUsername"].ToString();
+                    uxTargetPassword.Text = Settings.Default["SetTargetPassword"].ToString();
                     uxInstructionsFilename.Text = Settings.Default["SetInstructionsFile"].ToString();
                 }
 
@@ -110,7 +104,6 @@ namespace Sandboxberry
         {
             ShowUiProcessStarted();
             SaveUserSettings();
-
             
             try
             {
@@ -130,10 +123,7 @@ namespace Sandboxberry
                 ShowUiProcessEnded();
                 MessageBox.Show(string.Format("Unexpected error: {0} \r\n\r\n See Log.txt file for details", ex.Message), "Unexpected Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
-                
             }
-
-            
         }
 
         private void ShowUiProcessStarted()
@@ -141,7 +131,6 @@ namespace Sandboxberry
             uxStartButton.Enabled = false;
             uxWaitPicture.Visible = true;
             clearTargetDataToolStripMenuItem.Enabled = false;
-
         }
 
         private void ShowUiProcessEnded()
@@ -166,9 +155,9 @@ namespace Sandboxberry
         private SbbCredentials GetSourceCredentials()
         {
             var sourceCred = new SbbCredentials();
-            sourceCred.SalesforceUrl = "https://test.salesforce.com/services/Soap/u/32.0";
+            sourceCred.SalesforceUrl = "https://test.salesforce.com/services/Soap/u/54.0";
             if (uxSourceUrl.SelectedItem != null && uxSourceUrl.SelectedItem.ToString().StartsWith("Live"))
-                sourceCred.SalesforceUrl = "https://login.salesforce.com/services/Soap/u/32.0";
+                sourceCred.SalesforceUrl = "https://login.salesforce.com/services/Soap/u/54.0";
             sourceCred.SalesforceLogin = uxSourceUsername.Text;
             sourceCred.SalesforcePassword = uxSourcePassword.Text;
             return sourceCred;
@@ -177,7 +166,7 @@ namespace Sandboxberry
         private SbbCredentials GetTargetCredentials()
         {
             var targetCred = new SbbCredentials();
-            targetCred.SalesforceUrl = "https://test.salesforce.com/services/Soap/u/32.0";
+            targetCred.SalesforceUrl = "https://test.salesforce.com/services/Soap/u/54.0";
             targetCred.SalesforceLogin = uxTargetUsername.Text;
             targetCred.SalesforcePassword = uxTargetPassword.Text;
             return targetCred;
@@ -230,8 +219,6 @@ namespace Sandboxberry
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
 
                 }
-
-
             }
         }
 
@@ -284,9 +271,5 @@ namespace Sandboxberry
                 about.ShowDialog();
             }
         }
-
-       
-
-      
     }
 }
